@@ -1,0 +1,39 @@
+body {
+  background-color: maroon;
+}
+h1 {
+  color: saddlebrown;
+  display: block;
+  font-size: 40px;
+  text-align: center;
+  margin-top: 10px;
+}
+h2 {
+  color: saddlebrown;
+  display: block;
+  width: 800px;
+  font-style: oblique;
+  font-size: 20px;
+  text-align: left;
+  margin-top: 10px;
+  margin-left: auto;
+  margin-right: auto;
+}
+p {
+  color: maroon;
+  display: block;
+  width: 800px;
+  font-size: 14px;
+  text-align: left;
+  margin-top: 10px;
+  margin-left: auto;
+  margin-right: auto;
+}
+canvas {
+  background-color: whitesmoke;
+  padding: 0;
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+  margin-top: 10px;
+}
