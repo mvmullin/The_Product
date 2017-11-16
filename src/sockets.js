@@ -2,9 +2,6 @@ const xxh = require('xxhashjs');
 
 let io;
 
-// const canvasW = 600;
-const canvasH = 1000;
-
 // key: room, value: count in room
 const roomCounts = {};
 

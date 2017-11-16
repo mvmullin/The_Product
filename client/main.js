@@ -21,9 +21,15 @@ const draw = () => {
   movePlayer(); // get player movement
   
   ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
-  
+  drawHUD();
   drawPlayers();
   requestAnimationFrame(draw); // continue to draw updates
+};
+
+const drawHUD = () => {
+  ctx.font = '20px Verdana';
+  ctx.textAlign = 'center';
+  ctx.fillText('0000', canvas.width / 2, 30);
 };
 
 // linear interpolation to jump percentages to new position
