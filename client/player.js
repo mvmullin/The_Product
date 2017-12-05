@@ -17,6 +17,27 @@ const drawPlayers = () => {
     ctx.arc(player.x, player.y, player.rad, 0, 2 * Math.PI);
     ctx.fillStyle = player.color;
     ctx.fill();
+    
+    if(player.attacking) {
+      // get angle of attack based on mouse click location
+      let dx = player.mouseX - player.x;
+      let dy = player.mouseY - player.y;
+      let angle = Math.atan2(dy, dx);
+      console.log(dx);
+      console.log(dy);
+      
+      // draw attack
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(angle);
+      let path = new Path2D();
+      path.moveTo(50, 0);
+      path.lineTo(0, 5);
+      path.lineTo(0, -5);
+      ctx.fillStyle = '#8c8c8c'
+      ctx.fill(path);
+      ctx.restore();
+    }
   }
 };
 
@@ -42,6 +63,11 @@ const updatePlayer = (data) => {
   player.prevY = data.prevY;
   player.destX = data.destX;
   player.destY = data.destY;
+  
+  //update attack info
+  player.attacking = data.attacking;
+  player.mouseX = data.mouseX;
+  player.mouseY = data.mouseY;
 
   // reset lerp percentage
   player.alpha = 0.05;
@@ -92,4 +118,9 @@ const movePlayer = () => {
   
   // send movement to server
   socket.emit('move', player);
+};
+
+// end player attack so they can attack again
+const endAttack = () => {
+  players[id].attacking = false;
 }

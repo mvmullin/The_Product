@@ -2,15 +2,21 @@ let id; // player's unique id
 let color; // player's unique color
 let socket; // player's socket
 let players = {}; // object to hold player properties
-let ingrediants = {}; // object to hold falling ingrediants
-let ingrediantNum = 0;
+let enemies = {}; // object of enemies in the room
 let moveLeft = false; // left or a held
 let moveRight = false; // right or d held
 let moveUp = false; // up or w held
 let moveDown = false; // down or s held
 
+// player in the middle of attack?
+let swinging = false;
+
+//canvas
 let canvas;
 let ctx;
+let canvasOffset;
+let offsetX;
+let offsetY;
 
 // bread properties
 let breadHeight = 10;
@@ -23,6 +29,7 @@ const draw = () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
   drawHUD();
   drawPlayers();
+  drawEnemies();
   requestAnimationFrame(draw); // continue to draw updates
 };
 
@@ -65,11 +72,24 @@ const keyDownHandler = (e) => {
   moveDown = keysDown[40] || keysDown[83]; // down or s held
 };
 
+// function to update position of initial arrow draw
+const mouseDownHandler = (e) => {
+  if(!players[id].attacking) {
+    players[id].attacking = true;
+    players[id].mouseX = parseInt(e.clientX - offsetX);
+    players[id].mouseY = parseInt(e.clientY - offsetY);
+    setTimeout(endAttack, 100);
+  }
+};
+
 // initialize scripts
 const init = () => { 
   socket = io.connect();
   canvas = document.querySelector('#myCanvas');
   ctx = canvas.getContext('2d');
+
+  offsetX = canvas.offsetLeft;
+  offsetY = canvas.offsetTop;
 
   socket.on('connect', () => {
     socket.emit('join', { width: canvas.width, height: canvas.height})
@@ -77,10 +97,12 @@ const init = () => {
 
   socket.on('joined', setPlayer); // set player on server 'joined' event
   socket.on('updateMovement', updatePlayer); // update on server 'updateClient' event
+  socket.on('updateEnemies', updateEnemies);
   socket.on('left', removePlayer); // remove player on server 'removePlayer event
   
   document.body.addEventListener('keydown', keyDownHandler);
   document.body.addEventListener('keyup', keyDownHandler);
+  document.body.addEventListener('mousedown', mouseDownHandler);
   
 };
 

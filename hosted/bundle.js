@@ -4,15 +4,21 @@ var id = void 0; // player's unique id
 var color = void 0; // player's unique color
 var socket = void 0; // player's socket
 var players = {}; // object to hold player properties
-var ingrediants = {}; // object to hold falling ingrediants
-var ingrediantNum = 0;
+var enemies = {}; // object of enemies in the room
 var moveLeft = false; // left or a held
 var moveRight = false; // right or d held
 var moveUp = false; // up or w held
 var moveDown = false; // down or s held
 
+// player in the middle of attack?
+var swinging = false;
+
+//canvas
 var canvas = void 0;
 var ctx = void 0;
+var canvasOffset = void 0;
+var offsetX = void 0;
+var offsetY = void 0;
 
 // bread properties
 var breadHeight = 10;
@@ -25,6 +31,7 @@ var draw = function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
   drawHUD();
   drawPlayers();
+  drawEnemies();
   requestAnimationFrame(draw); // continue to draw updates
 };
 
@@ -69,11 +76,24 @@ var keyDownHandler = function keyDownHandler(e) {
   moveDown = keysDown[40] || keysDown[83]; // down or s held
 };
 
+// function to update position of initial arrow draw
+var mouseDownHandler = function mouseDownHandler(e) {
+  if (!players[id].attacking) {
+    players[id].attacking = true;
+    players[id].mouseX = parseInt(e.clientX - offsetX);
+    players[id].mouseY = parseInt(e.clientY - offsetY);
+    setTimeout(endAttack, 100);
+  }
+};
+
 // initialize scripts
 var init = function init() {
   socket = io.connect();
   canvas = document.querySelector('#myCanvas');
   ctx = canvas.getContext('2d');
+
+  offsetX = canvas.offsetLeft;
+  offsetY = canvas.offsetTop;
 
   socket.on('connect', function () {
     socket.emit('join', { width: canvas.width, height: canvas.height });
@@ -81,10 +101,12 @@ var init = function init() {
 
   socket.on('joined', setPlayer); // set player on server 'joined' event
   socket.on('updateMovement', updatePlayer); // update on server 'updateClient' event
+  socket.on('updateEnemies', updateEnemies);
   socket.on('left', removePlayer); // remove player on server 'removePlayer event
 
   document.body.addEventListener('keydown', keyDownHandler);
   document.body.addEventListener('keyup', keyDownHandler);
+  document.body.addEventListener('mousedown', mouseDownHandler);
 };
 
 window.onload = init;
@@ -108,6 +130,27 @@ var drawPlayers = function drawPlayers() {
     ctx.arc(player.x, player.y, player.rad, 0, 2 * Math.PI);
     ctx.fillStyle = player.color;
     ctx.fill();
+
+    if (player.attacking) {
+      // get angle of attack based on mouse click location
+      var dx = player.mouseX - player.x;
+      var dy = player.mouseY - player.y;
+      var angle = Math.atan2(dy, dx);
+      console.log(dx);
+      console.log(dy);
+
+      // draw attack
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(angle);
+      var path = new Path2D();
+      path.moveTo(50, 0);
+      path.lineTo(0, 5);
+      path.lineTo(0, -5);
+      ctx.fillStyle = '#8c8c8c';
+      ctx.fill(path);
+      ctx.restore();
+    }
   }
 };
 
@@ -132,6 +175,11 @@ var updatePlayer = function updatePlayer(data) {
   player.prevY = data.prevY;
   player.destX = data.destX;
   player.destY = data.destY;
+
+  //update attack info
+  player.attacking = data.attacking;
+  player.mouseX = data.mouseX;
+  player.mouseY = data.mouseY;
 
   // reset lerp percentage
   player.alpha = 0.05;
@@ -178,4 +226,53 @@ var movePlayer = function movePlayer() {
 
   // send movement to server
   socket.emit('move', player);
+};
+
+// end player attack so they can attack again
+var endAttack = function endAttack() {
+  players[id].attacking = false;
+};
+"use strict";
+
+var lastUpdate = 0;
+// update enemies from server
+var updateEnemies = function updateEnemies(data) {
+  if (data.lastUpdate > lastUpdate) {
+    var enemyKeys = Object.keys(data.enemies);
+    for (var i = 0; i < enemyKeys.length; i++) {
+      // iterate enemies
+      // add enemy if new
+      if (!enemies[enemyKeys[i]]) enemies[enemyKeys[i]] = data.enemies[enemyKeys[i]];else {
+        // else update enemy lerping data
+        enemies[enemyKeys[i]].prevX = data.enemies[enemyKeys[i]].prevX;
+        enemies[enemyKeys[i]].prevY = data.enemies[enemyKeys[i]].prevY;
+        enemies[enemyKeys[i]].destX = data.enemies[enemyKeys[i]].destX;
+        enemies[enemyKeys[i]].destY = data.enemies[enemyKeys[i]].destY;
+        enemies[enemyKeys[i]].alpha = 0.05;
+      }
+    }
+
+    lastUpdate = data.lastUpdate;
+  }
+};
+
+// draw enemies
+var drawEnemies = function drawEnemies() {
+  var keys = Object.keys(enemies); // get all enemy id's
+  // Iterate enemies
+  for (var i = 0; i < keys.length; i++) {
+    var enemy = enemies[keys[i]];
+
+    // keep animation running smoothly
+    if (enemy.alpha < 1) enemy.alpha += 0.05;
+
+    enemy.x = lerp(enemy.prevX, enemy.destX, enemy.alpha); // smooth transition with lerp
+    enemy.y = lerp(enemy.prevY, enemy.destY, enemy.alpha);
+
+    // draw enemy
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, enemy.rad, 0, 2 * Math.PI);
+    ctx.fillStyle = enemy.color;
+    ctx.fill();
+  }
 };
