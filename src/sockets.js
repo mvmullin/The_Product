@@ -20,6 +20,9 @@ const players = {};
 // key: room, value: object of enemies in room
 const enemies = {};
 
+// key: room, value: score of the room
+const scores = {};
+
 // function to handle new sockets and create new players
 const createPlayer = (sock) => {
   const socket = sock;
@@ -31,6 +34,7 @@ const createPlayer = (sock) => {
       socket.join(room);
       rooms[socket.name] = room;
       roomCounts[room] = 1;
+      scores[room] = 0;
     } else {
       const roomKeys = Object.keys(roomCounts); // get each room
       let foundRoom = false; // remains false if all rooms are full
@@ -49,6 +53,7 @@ const createPlayer = (sock) => {
         socket.join(room);
         rooms[socket.name] = room;
         roomCounts[room] = 1;
+        scores[room] = 0;
       }
     }
 
@@ -68,12 +73,49 @@ const createPlayer = (sock) => {
       alpha: 0, // default % from prev to dest
       health: 100,
       attacking: false,
+      mouseX: 0,
+      mouseY: 0,
     };
     if (players[rooms[socket.name]] == null) players[rooms[socket.name]] = {};
     players[rooms[socket.name]][player.id] = player;
 
     socket.emit('joined', player);
   });
+};
+
+// damage enemy
+const damageEnemy = (enemy, room) => {
+  delete enemies[room][enemy.id];
+  scores[room] += 1;
+  io.sockets.in(room).emit('removeEnemy', enemy.id);
+  io.sockets.in(room).emit('updateScore', scores[room]);
+};
+
+// function to see if an attack hits an enemy
+const checkAttack = (player) => {
+  const enemyKeys = Object.keys(enemies[rooms[player.id]]);
+  
+  // calculate weapon tip relative to player
+  let dx = player.mouseX - player.destX;
+  let dy = player.mouseY - player.destY;
+  let mag = Math.sqrt((dx * dx) + (dy * dy));
+
+  const weaponX = (dx / mag) * 50;
+  const weaponY = (dy / mag) * 50;
+  
+  for(let i = 0; i < enemyKeys.length; i++) {
+    const enemy = enemies[rooms[player.id]][enemyKeys[i]];
+    
+    //calculate weapon distance to enemy
+    dx = (player.destX + weaponX) - enemy.destX;
+    dy = (player.destY + weaponY) - enemy.destY;
+    mag = Math.sqrt((dx * dx) + (dy * dy));
+    
+    if(mag < enemy.rad) { // if weapon tip is within enemy's radius
+      damageEnemy(enemy, rooms[player.id]);
+    }
+    
+  }
 };
 
 // function to process client movement
@@ -85,6 +127,8 @@ const onMove = (sock) => {
 
     players[rooms[socket.name]][socket.name].lastUpdate = new Date().getTime();
     socket.broadcast.to(rooms[socket.name]).emit('updateMovement', players[rooms[socket.name]][socket.name]);
+    
+    if(data.attacking) checkAttack(data);
   });
 };
 
@@ -204,6 +248,7 @@ const onDisconnect = (sock) => {
 
   socket.on('disconnect', () => {
     io.sockets.in(rooms[socket.name]).emit('left', players[rooms[socket.name]][socket.name].id); // notify clients
+    delete players[rooms[socket.name]][socket.name]; // delete player on server
     socket.leave(rooms[socket.name]); // remove socket from room
     roomCounts[rooms[socket.name]]--;
     if (roomCounts[rooms[socket.name]] <= 0) delete roomCounts[rooms[socket.name]];

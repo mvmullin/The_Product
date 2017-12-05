@@ -40,3 +40,10 @@ const drawEnemies = () => {
     ctx.fill();
   }
 };
+
+// remove enemy based on id
+const removeEnemy = (id) => {
+  if(enemies[id]) {
+    delete enemies[id];
+  }
+};

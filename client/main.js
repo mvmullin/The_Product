@@ -8,9 +8,6 @@ let moveRight = false; // right or d held
 let moveUp = false; // up or w held
 let moveDown = false; // down or s held
 
-// player in the middle of attack?
-let swinging = false;
-
 //canvas
 let canvas;
 let ctx;
@@ -18,9 +15,8 @@ let canvasOffset;
 let offsetX;
 let offsetY;
 
-// bread properties
-let breadHeight = 10;
-let breadWidth = 30;
+// score
+let score = 0;
 
 //redraw canvas
 const draw = () => {
@@ -34,9 +30,12 @@ const draw = () => {
 };
 
 const drawHUD = () => {
+  let scoreStr = score.toString();
+  while(scoreStr.length < 6) scoreStr = '0' + scoreStr;
+  
   ctx.font = '20px Verdana';
   ctx.textAlign = 'center';
-  ctx.fillText('0000', canvas.width / 2, 30);
+  ctx.fillText(scoreStr, canvas.width / 2, 30);
 };
 
 // linear interpolation to jump percentages to new position
@@ -82,6 +81,16 @@ const mouseDownHandler = (e) => {
   }
 };
 
+const updateScore = (serverScore) => {
+  score = serverScore;
+};
+
+const handleResize = () => {
+  console.log('handleResize');
+  offsetX = canvas.offsetLeft;
+  offsetY = canvas.offsetTop;
+};
+
 // initialize scripts
 const init = () => { 
   socket = io.connect();
@@ -98,11 +107,14 @@ const init = () => {
   socket.on('joined', setPlayer); // set player on server 'joined' event
   socket.on('updateMovement', updatePlayer); // update on server 'updateClient' event
   socket.on('updateEnemies', updateEnemies);
-  socket.on('left', removePlayer); // remove player on server 'removePlayer event
+  socket.on('left', removePlayer); // remove player on server 'removePlayer' event
+  socket.on('removeEnemy', removeEnemy); // remove enemy on server 'removeEnemy' event
+  socket.on('updateScore', updateScore);
   
   document.body.addEventListener('keydown', keyDownHandler);
   document.body.addEventListener('keyup', keyDownHandler);
   document.body.addEventListener('mousedown', mouseDownHandler);
+  window.addEventListener('resize', handleResize);
   
 };
 

@@ -23,8 +23,6 @@ const drawPlayers = () => {
       let dx = player.mouseX - player.x;
       let dy = player.mouseY - player.y;
       let angle = Math.atan2(dy, dx);
-      console.log(dx);
-      console.log(dy);
       
       // draw attack
       ctx.save();

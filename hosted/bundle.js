@@ -10,9 +10,6 @@ var moveRight = false; // right or d held
 var moveUp = false; // up or w held
 var moveDown = false; // down or s held
 
-// player in the middle of attack?
-var swinging = false;
-
 //canvas
 var canvas = void 0;
 var ctx = void 0;
@@ -20,9 +17,8 @@ var canvasOffset = void 0;
 var offsetX = void 0;
 var offsetY = void 0;
 
-// bread properties
-var breadHeight = 10;
-var breadWidth = 30;
+// score
+var score = 0;
 
 //redraw canvas
 var draw = function draw() {
@@ -36,9 +32,12 @@ var draw = function draw() {
 };
 
 var drawHUD = function drawHUD() {
-  ctx.font = '20px Verdana';
+  var scoreStr = score.toString();
+  while (scoreStr.length < 6) {
+    scoreStr = '0' + scoreStr;
+  }ctx.font = '20px Verdana';
   ctx.textAlign = 'center';
-  ctx.fillText('0000', canvas.width / 2, 30);
+  ctx.fillText(scoreStr, canvas.width / 2, 30);
 };
 
 // linear interpolation to jump percentages to new position
@@ -86,6 +85,16 @@ var mouseDownHandler = function mouseDownHandler(e) {
   }
 };
 
+var updateScore = function updateScore(serverScore) {
+  score = serverScore;
+};
+
+var handleResize = function handleResize() {
+  console.log('handleResize');
+  offsetX = canvas.offsetLeft;
+  offsetY = canvas.offsetTop;
+};
+
 // initialize scripts
 var init = function init() {
   socket = io.connect();
@@ -102,11 +111,14 @@ var init = function init() {
   socket.on('joined', setPlayer); // set player on server 'joined' event
   socket.on('updateMovement', updatePlayer); // update on server 'updateClient' event
   socket.on('updateEnemies', updateEnemies);
-  socket.on('left', removePlayer); // remove player on server 'removePlayer event
+  socket.on('left', removePlayer); // remove player on server 'removePlayer' event
+  socket.on('removeEnemy', removeEnemy); // remove enemy on server 'removeEnemy' event
+  socket.on('updateScore', updateScore);
 
   document.body.addEventListener('keydown', keyDownHandler);
   document.body.addEventListener('keyup', keyDownHandler);
   document.body.addEventListener('mousedown', mouseDownHandler);
+  window.addEventListener('resize', handleResize);
 };
 
 window.onload = init;
@@ -136,8 +148,6 @@ var drawPlayers = function drawPlayers() {
       var dx = player.mouseX - player.x;
       var dy = player.mouseY - player.y;
       var angle = Math.atan2(dy, dx);
-      console.log(dx);
-      console.log(dy);
 
       // draw attack
       ctx.save();
@@ -274,5 +284,12 @@ var drawEnemies = function drawEnemies() {
     ctx.arc(enemy.x, enemy.y, enemy.rad, 0, 2 * Math.PI);
     ctx.fillStyle = enemy.color;
     ctx.fill();
+  }
+};
+
+// remove enemy based on id
+var removeEnemy = function removeEnemy(id) {
+  if (enemies[id]) {
+    delete enemies[id];
   }
 };
