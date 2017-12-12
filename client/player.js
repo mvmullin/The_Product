@@ -18,6 +18,17 @@ const drawPlayers = () => {
     ctx.fillStyle = player.color;
     ctx.fill();
     
+    // draw health
+    let healthWidth = 50;
+    let healthHeight = 5;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(player.x - (healthWidth / 2), player.y - 35, healthWidth, healthHeight);
+    
+    let remainingWidth = healthWidth * (player.health / 100);
+    ctx.fillStyle = 'green';
+    ctx.fillRect(player.x - (healthWidth / 2), player.y - 35, remainingWidth, healthHeight);
+    
+    
     if(player.attacking) {
       // get angle of attack based on mouse click location
       let dx = player.mouseX - player.x;
@@ -37,6 +48,14 @@ const drawPlayers = () => {
       ctx.restore();
     }
   }
+};
+
+// update a player's health from server
+const updateHealth = (data) => {
+  console.log('updateHealth');
+  if(players[data.playerID]) players[data.playerID].health = data.health;
+  if(players[id].health <= 0) socket.emit('leave');
+  
 };
 
 // update a player from server
@@ -73,6 +92,7 @@ const updatePlayer = (data) => {
 
 // remove player based on id
 const removePlayer = (id) => {
+  console.log('player removed');
   if(players[id]) {
     delete players[id];
   }
@@ -84,6 +104,11 @@ const setPlayer = (data) => {
   color = data.color; // set color from server data
   players[id] = data; // set player with new id
   requestAnimationFrame(draw); // draw with new info
+};
+
+// signal ready to server
+const readyUp = () => {
+  socket.emit('ready', ready);
 };
 
 // function to update player position

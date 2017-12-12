@@ -9,6 +9,8 @@ var moveLeft = false; // left or a held
 var moveRight = false; // right or d held
 var moveUp = false; // up or w held
 var moveDown = false; // down or s held
+var gameStarted = false;
+var ready = false;
 
 //canvas
 var canvas = void 0;
@@ -22,12 +24,24 @@ var score = 0;
 
 //redraw canvas
 var draw = function draw() {
-  movePlayer(); // get player movement
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
-  drawHUD();
-  drawPlayers();
-  drawEnemies();
+  //if(gameStarted) {
+  if (players[id].health > 0) {
+    movePlayer(); // get player movement
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
+    drawHUD();
+    drawPlayers();
+    drawEnemies();
+  } else {
+    ctx.font = '20px Verdana';
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU DIED', canvas.width / 2, canvas.height / 2);
+  }
+  /*} else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height):
+    drawReadyStates();
+  }*/
   requestAnimationFrame(draw); // continue to draw updates
 };
 
@@ -38,6 +52,30 @@ var drawHUD = function drawHUD() {
   }ctx.font = '20px Verdana';
   ctx.textAlign = 'center';
   ctx.fillText(scoreStr, canvas.width / 2, 30);
+};
+
+var drawReadyStates = function drawReadyStates() {
+  var keys = Object.keys(players); // get all player id's
+  var drawX = canvas.width / 2;
+  var drawY = canvas.height / 2;
+
+  // Iterate players
+  for (var i = 0; i < keys.length; i++) {
+    var player = players[keys[i]];
+
+    if (!player.ready) ctx.fillStyle = 'red';else ctx.fillSyle = 'green';
+    ctx.beginPath();
+    ctx.arc(drawX, drawY, player.rad, 0, 2 * Math.PI);
+    ctx.fill();
+
+    var name = 'Player ' + i.toString();
+    if (player.id = id) name = 'You';
+    ctx.font = '20px Verdana';
+    ctx.textAlign = 'left';
+    ctx.fillText(name, drawX + (player.rad + 5), drawY);
+
+    drawY += 30;
+  }
 };
 
 // linear interpolation to jump percentages to new position
@@ -54,13 +92,16 @@ var keyDownHandler = function keyDownHandler(e) {
   // If key isn't held check press commands
   if (!keysDown[e.keyCode]) {
     switch (e.keyCode) {
-      case 81:
-        // Q
-        dropIngredient();
+      case 82:
+        // R
+        /*if(!gameStarted) {
+          ready = !ready;
+          readyUp();
+        }*/
         break;
-      case 69:
-        // E
-        combineIngredients();
+      case 32:
+        // space
+        playAgain();
         break;
       default:
         break;
@@ -69,30 +110,45 @@ var keyDownHandler = function keyDownHandler(e) {
 
   keysDown[e.keyCode] = e.type == 'keydown'; // check if key is down
 
+  //if(gameStarted) {
   moveLeft = keysDown[37] || keysDown[65]; // left or a held
   moveRight = keysDown[39] || keysDown[68]; // right or d held
   moveUp = keysDown[38] || keysDown[87]; // up or w held
   moveDown = keysDown[40] || keysDown[83]; // down or s held
+  //}
 };
 
 // function to update position of initial arrow draw
 var mouseDownHandler = function mouseDownHandler(e) {
-  if (!players[id].attacking) {
-    players[id].attacking = true;
-    players[id].mouseX = parseInt(e.clientX - offsetX);
-    players[id].mouseY = parseInt(e.clientY - offsetY);
-    setTimeout(endAttack, 100);
-  }
+  if (!players[id].attacking /*&& gameStarted*/) {
+      players[id].attacking = true;
+      players[id].mouseX = parseInt(e.clientX - offsetX);
+      players[id].mouseY = parseInt(e.clientY - offsetY);
+      setTimeout(endAttack, 100);
+    }
 };
 
 var updateScore = function updateScore(serverScore) {
   score = serverScore;
 };
 
+var playAgain = function playAgain() {
+  socket.emit('join', { width: canvas.width, height: canvas.height });
+};
+
 var handleResize = function handleResize() {
   console.log('handleResize');
   offsetX = canvas.offsetLeft;
   offsetY = canvas.offsetTop;
+};
+
+var startGame = function startGame() {
+  gameStarted = true;
+};
+
+var updateReady = function updateReady(data) {
+  if (!players[data.id]) players[data.id] = {};
+  players[data.id].ready = data.ready;
 };
 
 // initialize scripts
@@ -114,6 +170,9 @@ var init = function init() {
   socket.on('left', removePlayer); // remove player on server 'removePlayer' event
   socket.on('removeEnemy', removeEnemy); // remove enemy on server 'removeEnemy' event
   socket.on('updateScore', updateScore);
+  socket.on('updateHealth', updateHealth);
+  socket.on('updateReady', updateReady);
+  socket.on('startGame', startGame);
 
   document.body.addEventListener('keydown', keyDownHandler);
   document.body.addEventListener('keyup', keyDownHandler);
@@ -143,6 +202,16 @@ var drawPlayers = function drawPlayers() {
     ctx.fillStyle = player.color;
     ctx.fill();
 
+    // draw health
+    var healthWidth = 50;
+    var healthHeight = 5;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(player.x - healthWidth / 2, player.y - 35, healthWidth, healthHeight);
+
+    var remainingWidth = healthWidth * (player.health / 100);
+    ctx.fillStyle = 'green';
+    ctx.fillRect(player.x - healthWidth / 2, player.y - 35, remainingWidth, healthHeight);
+
     if (player.attacking) {
       // get angle of attack based on mouse click location
       var dx = player.mouseX - player.x;
@@ -162,6 +231,13 @@ var drawPlayers = function drawPlayers() {
       ctx.restore();
     }
   }
+};
+
+// update a player's health from server
+var updateHealth = function updateHealth(data) {
+  console.log('updateHealth');
+  if (players[data.playerID]) players[data.playerID].health = data.health;
+  if (players[id].health <= 0) socket.emit('leave');
 };
 
 // update a player from server
@@ -197,6 +273,7 @@ var updatePlayer = function updatePlayer(data) {
 
 // remove player based on id
 var removePlayer = function removePlayer(id) {
+  console.log('player removed');
   if (players[id]) {
     delete players[id];
   }
@@ -208,6 +285,11 @@ var setPlayer = function setPlayer(data) {
   color = data.color; // set color from server data
   players[id] = data; // set player with new id
   requestAnimationFrame(draw); // draw with new info
+};
+
+// signal ready to server
+var readyUp = function readyUp() {
+  socket.emit('ready', ready);
 };
 
 // function to update player position

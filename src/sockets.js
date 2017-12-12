@@ -8,13 +8,16 @@ const canvasH = 800;
 // key: room, value: count in room
 const roomCounts = {};
 
+// key: room, value: ready state
+const roomStates = {};
+
 // key: socket.name, value: room of socket
 const rooms = {};
 
 // max room size
 const roomMax = 4;
 
-// key: socket.name, value: player object of socket
+// key: room, value: object of players in room
 const players = {};
 
 // key: room, value: object of enemies in room
@@ -34,12 +37,13 @@ const createPlayer = (sock) => {
       socket.join(room);
       rooms[socket.name] = room;
       roomCounts[room] = 1;
+      roomStates[room] = false;
       scores[room] = 0;
     } else {
       const roomKeys = Object.keys(roomCounts); // get each room
       let foundRoom = false; // remains false if all rooms are full
       for (let i = 0; i < roomKeys.length; i++) {
-        if (roomCounts[roomKeys[i]] < roomMax) {
+        if (roomCounts[roomKeys[i]] < roomMax /*&& !roomStates[roomKeys[i]]*/) {
           const room = `room${i}`;
           socket.join(room);
           rooms[socket.name] = room;
@@ -53,6 +57,7 @@ const createPlayer = (sock) => {
         socket.join(room);
         rooms[socket.name] = room;
         roomCounts[room] = 1;
+        roomStates[room] = false;
         scores[room] = 0;
       }
     }
@@ -75,6 +80,7 @@ const createPlayer = (sock) => {
       attacking: false,
       mouseX: 0,
       mouseY: 0,
+      ready: false,
     };
     if (players[rooms[socket.name]] == null) players[rooms[socket.name]] = {};
     players[rooms[socket.name]][player.id] = player;
@@ -153,6 +159,35 @@ const findClosestPlayer = (enemy, room) => {
   return closestPlayer;
 };
 
+// function to damage player
+const damagePlayer = (playerID, room) => {
+  players[room][playerID].health -= 10;
+  
+  io.sockets.in(room).emit('updateHealth', { playerID: playerID, health: players[room][playerID].health });
+};
+
+// function to check enemy/player collisions
+const checkCollisions = (roomEnemies, roomPlayers, room) => {
+  const enemyKeys = Object.keys(roomEnemies);
+  for(let i = 0; i < enemyKeys.length; i++) {
+    const playerKeys = Object.keys(roomPlayers);
+    const enemy = roomEnemies[enemyKeys[i]];
+    for(let j = 0; j < playerKeys.length; j++) {
+      const player = roomPlayers[playerKeys[j]];
+      
+      const dx = player.destX - enemy.destX;
+      const dy = player.destY - enemy.destY;
+      const dist = Math.sqrt((dx * dx) + (dy * dy));
+      
+      if(dist < (player.rad + enemy.rad)) {
+        damagePlayer(player.id, room);
+      }
+      
+    }
+  }
+};
+
+// function to update enemy positions
 const updateEnemies = () => {
   const roomKeys = Object.keys(roomCounts); // get each room
   for (let i = 0; i < roomKeys.length; i++) {
@@ -190,6 +225,9 @@ const updateEnemies = () => {
       // send room's updated enemies
       const lastUpdate = new Date().getTime();
       io.sockets.in(roomKeys[i]).emit('updateEnemies', { enemies: enemies[roomKeys[i]], lastUpdate });
+      
+      // check enemy/player collisions
+      checkCollisions(enemies[roomKeys[i]], players[roomKeys[i]], roomKeys[i]); 
     }
   }
 };
@@ -198,7 +236,7 @@ const spawnEnemy = () => {
   const roomKeys = Object.keys(roomCounts); // get each room
   for (let i = 0; i < roomKeys.length; i++) {
     if (enemies[roomKeys[i]] == null) enemies[roomKeys[i]] = {};
-    if (Object.keys(enemies[roomKeys[i]]).length < 10) {
+    if (Object.keys(enemies[roomKeys[i]]).length < 10 /*&& roomStates[roomKeys[i]]*/) {
       // get random side to spawn on
       const randSide = Math.floor((Math.random() * 4) + 1);
 
@@ -242,6 +280,41 @@ const spawnEnemy = () => {
   }
 };
 
+// check if all players are ready
+const onReady = (sock) => {
+  const socket = sock;
+  
+  socket.on('ready', (readyState) => {
+    players[rooms[socket.name]][socket.name].ready = readyState;
+    socket.broadcast.to(rooms[socket.name]).emit('updateReady', { id: players[rooms[socket.name]][socket.name].id, ready: readyState });
+    
+    playerKeys = Object.keys(players[rooms[socket.name]]);
+    let allReady = true;
+    for(let i = 0; i < playerKeys.length; i++) {
+      allReady &= players[rooms[socket.name]][playerKeys[i]].ready;
+    }
+    
+    if(allReady) {
+      io.sockets.in(rooms[socket.name]).emit('startGame');
+      roomStates[rooms[socket.name]] = true;
+    }
+  });
+};
+
+// leave room on death
+const onLeave = (sock) => {
+  const socket = sock;
+
+  socket.on('leave', () => {
+    delete players[rooms[socket.name]][socket.name]; // delete player on server to be recreated
+    socket.leave(rooms[socket.name]); // remove socket from room
+    roomCounts[rooms[socket.name]]--;
+    io.sockets.in(rooms[socket.name]).emit('left', players[rooms[socket.name]][socket.name].id); // notify clients
+    if (roomCounts[rooms[socket.name]] <= 0) delete roomCounts[rooms[socket.name]];
+    delete rooms[socket.name];
+  });
+};
+
 // delete players that disconnect
 const onDisconnect = (sock) => {
   const socket = sock;
@@ -265,6 +338,8 @@ const configure = (ioServer) => {
   io.sockets.on('connection', (socket) => {
     createPlayer(socket);
     onMove(socket);
+    onReady(socket);
+    onLeave(socket);
     onDisconnect(socket);
   });
 };

@@ -7,6 +7,8 @@ let moveLeft = false; // left or a held
 let moveRight = false; // right or d held
 let moveUp = false; // up or w held
 let moveDown = false; // down or s held
+let gameStarted = false;
+let ready = false;
 
 //canvas
 let canvas;
@@ -20,12 +22,25 @@ let score = 0;
 
 //redraw canvas
 const draw = () => {
-  movePlayer(); // get player movement
   
-  ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
-  drawHUD();
-  drawPlayers();
-  drawEnemies();
+  //if(gameStarted) {
+    if(players[id].health > 0) 
+    {
+      movePlayer(); // get player movement
+  
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
+      drawHUD();
+      drawPlayers();
+      drawEnemies();
+    } else {
+      ctx.font = '20px Verdana';
+      ctx.textAlign = 'center';
+      ctx.fillText('YOU DIED', canvas.width / 2, canvas.height / 2);
+    }
+  /*} else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height):
+    drawReadyStates();
+  }*/
   requestAnimationFrame(draw); // continue to draw updates
 };
 
@@ -36,6 +51,32 @@ const drawHUD = () => {
   ctx.font = '20px Verdana';
   ctx.textAlign = 'center';
   ctx.fillText(scoreStr, canvas.width / 2, 30);
+};
+
+const drawReadyStates = () => {
+  let keys = Object.keys(players); // get all player id's
+  let drawX = canvas.width / 2;
+  let drawY = canvas.height / 2;
+  
+  // Iterate players
+  for(let i = 0; i < keys.length; i++)
+  {
+    const player = players[keys[i]];
+    
+    if(!player.ready) ctx.fillStyle = 'red';
+    else ctx.fillSyle = 'green';
+    ctx.beginPath();
+    ctx.arc(drawX, drawY, player.rad, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    let name = 'Player ' + i.toString();
+    if(player.id = id) name = 'You';
+    ctx.font = '20px Verdana';
+    ctx.textAlign = 'left';
+    ctx.fillText(name, drawX + (player.rad + 5), drawY);
+    
+    drawY += 30;
+  }
 };
 
 // linear interpolation to jump percentages to new position
@@ -52,11 +93,14 @@ const keyDownHandler = (e) => {
   // If key isn't held check press commands
   if(!keysDown[e.keyCode]){
     switch(e.keyCode) {
-      case 81: // Q
-        dropIngredient();
+      case 82: // R
+        /*if(!gameStarted) {
+          ready = !ready;
+          readyUp();
+        }*/
         break;
-      case 69: // E
-        combineIngredients();
+      case 32: // space
+        playAgain();
         break;
       default:
         break;
@@ -65,15 +109,17 @@ const keyDownHandler = (e) => {
   
   keysDown[e.keyCode] = e.type == 'keydown'; // check if key is down
   
-  moveLeft = keysDown[37] || keysDown[65]; // left or a held
-  moveRight = keysDown[39] || keysDown[68]; // right or d held
-  moveUp = keysDown[38] || keysDown[87]; // up or w held
-  moveDown = keysDown[40] || keysDown[83]; // down or s held
+  //if(gameStarted) {
+    moveLeft = keysDown[37] || keysDown[65]; // left or a held
+    moveRight = keysDown[39] || keysDown[68]; // right or d held
+    moveUp = keysDown[38] || keysDown[87]; // up or w held
+    moveDown = keysDown[40] || keysDown[83]; // down or s held
+  //}
 };
 
 // function to update position of initial arrow draw
 const mouseDownHandler = (e) => {
-  if(!players[id].attacking) {
+  if(!players[id].attacking /*&& gameStarted*/) {
     players[id].attacking = true;
     players[id].mouseX = parseInt(e.clientX - offsetX);
     players[id].mouseY = parseInt(e.clientY - offsetY);
@@ -84,11 +130,24 @@ const mouseDownHandler = (e) => {
 const updateScore = (serverScore) => {
   score = serverScore;
 };
+  
+const playAgain = () => {
+  socket.emit('join', { width: canvas.width, height: canvas.height});
+}
 
 const handleResize = () => {
   console.log('handleResize');
   offsetX = canvas.offsetLeft;
   offsetY = canvas.offsetTop;
+};
+
+const startGame = () => {
+  gameStarted = true;
+};
+
+const updateReady = (data) => {
+  if(!players[data.id]) players[data.id] = {};
+  players[data.id].ready = data.ready;
 };
 
 // initialize scripts
@@ -101,7 +160,7 @@ const init = () => {
   offsetY = canvas.offsetTop;
 
   socket.on('connect', () => {
-    socket.emit('join', { width: canvas.width, height: canvas.height})
+    socket.emit('join', { width: canvas.width, height: canvas.height});
   });
 
   socket.on('joined', setPlayer); // set player on server 'joined' event
@@ -110,6 +169,9 @@ const init = () => {
   socket.on('left', removePlayer); // remove player on server 'removePlayer' event
   socket.on('removeEnemy', removeEnemy); // remove enemy on server 'removeEnemy' event
   socket.on('updateScore', updateScore);
+  socket.on('updateHealth', updateHealth);
+  socket.on('updateReady', updateReady);
+  socket.on('startGame', startGame);
   
   document.body.addEventListener('keydown', keyDownHandler);
   document.body.addEventListener('keyup', keyDownHandler);
