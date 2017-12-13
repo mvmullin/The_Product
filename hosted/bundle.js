@@ -11,6 +11,7 @@ var moveUp = false; // up or w held
 var moveDown = false; // down or s held
 var gameStarted = false;
 var ready = false;
+var dead = false;
 
 //canvas
 var canvas = void 0;
@@ -25,23 +26,22 @@ var score = 0;
 //redraw canvas
 var draw = function draw() {
 
-  //if(gameStarted) {
-  if (players[id].health > 0) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
+
+  if (dead) {
+    ctx.font = '20px Verdana';
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU DIED', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('(Press space bar to play again)', canvas.width / 2, canvas.height / 2 + 20);
+  } else if (gameStarted) {
     movePlayer(); // get player movement
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
     drawHUD();
     drawPlayers();
     drawEnemies();
   } else {
-    ctx.font = '20px Verdana';
-    ctx.textAlign = 'center';
-    ctx.fillText('YOU DIED', canvas.width / 2, canvas.height / 2);
-  }
-  /*} else {
-    ctx.clearRect(0, 0, canvas.width, canvas.height):
     drawReadyStates();
-  }*/
+  }
   requestAnimationFrame(draw); // continue to draw updates
 };
 
@@ -63,18 +63,21 @@ var drawReadyStates = function drawReadyStates() {
   for (var i = 0; i < keys.length; i++) {
     var player = players[keys[i]];
 
-    if (!player.ready) ctx.fillStyle = 'red';else ctx.fillSyle = 'green';
     ctx.beginPath();
+    if (!player.ready) ctx.fillStyle = 'red';else ctx.fillStyle = 'green';
     ctx.arc(drawX, drawY, player.rad, 0, 2 * Math.PI);
     ctx.fill();
 
-    var name = 'Player ' + i.toString();
-    if (player.id = id) name = 'You';
+    var num = i + 1;
+    var name = 'Player ' + num.toString();
+    if (player.id == id) name = 'You';
+    ctx.beginPath();
     ctx.font = '20px Verdana';
     ctx.textAlign = 'left';
+    ctx.fillStyle = player.color;
     ctx.fillText(name, drawX + (player.rad + 5), drawY);
 
-    drawY += 30;
+    drawY += 50;
   }
 };
 
@@ -94,14 +97,16 @@ var keyDownHandler = function keyDownHandler(e) {
     switch (e.keyCode) {
       case 82:
         // R
-        /*if(!gameStarted) {
+        if (!gameStarted) {
           ready = !ready;
+          players[id].ready = ready;
           readyUp();
-        }*/
+        }
         break;
       case 32:
         // space
-        playAgain();
+        e.preventDefault();
+        if (dead) playAgain();
         break;
       default:
         break;
@@ -110,22 +115,22 @@ var keyDownHandler = function keyDownHandler(e) {
 
   keysDown[e.keyCode] = e.type == 'keydown'; // check if key is down
 
-  //if(gameStarted) {
-  moveLeft = keysDown[37] || keysDown[65]; // left or a held
-  moveRight = keysDown[39] || keysDown[68]; // right or d held
-  moveUp = keysDown[38] || keysDown[87]; // up or w held
-  moveDown = keysDown[40] || keysDown[83]; // down or s held
-  //}
+  if (gameStarted) {
+    moveLeft = keysDown[37] || keysDown[65]; // left or a held
+    moveRight = keysDown[39] || keysDown[68]; // right or d held
+    moveUp = keysDown[38] || keysDown[87]; // up or w held
+    moveDown = keysDown[40] || keysDown[83]; // down or s held
+  }
 };
 
 // function to update position of initial arrow draw
 var mouseDownHandler = function mouseDownHandler(e) {
-  if (!players[id].attacking /*&& gameStarted*/) {
-      players[id].attacking = true;
-      players[id].mouseX = parseInt(e.clientX - offsetX);
-      players[id].mouseY = parseInt(e.clientY - offsetY);
-      setTimeout(endAttack, 100);
-    }
+  if (gameStarted && players[id] && !players[id].attacking) {
+    players[id].attacking = true;
+    players[id].mouseX = parseInt(e.clientX - offsetX);
+    players[id].mouseY = parseInt(e.clientY - offsetY);
+    setTimeout(endAttack, 100);
+  }
 };
 
 var updateScore = function updateScore(serverScore) {
@@ -134,6 +139,7 @@ var updateScore = function updateScore(serverScore) {
 
 var playAgain = function playAgain() {
   socket.emit('join', { width: canvas.width, height: canvas.height });
+  dead = false;
 };
 
 var handleResize = function handleResize() {
@@ -165,6 +171,10 @@ var init = function init() {
   });
 
   socket.on('joined', setPlayer); // set player on server 'joined' event
+  socket.on('addPlayer', addPlayer);
+
+  requestAnimationFrame(draw); // draw with new info
+
   socket.on('updateMovement', updatePlayer); // update on server 'updateClient' event
   socket.on('updateEnemies', updateEnemies);
   socket.on('left', removePlayer); // remove player on server 'removePlayer' event
@@ -190,45 +200,47 @@ var drawPlayers = function drawPlayers() {
   for (var i = 0; i < keys.length; i++) {
     var player = players[keys[i]];
 
-    // keep animation running smoothly
-    if (player.alpha < 1) player.alpha += 0.05;
+    if (player.health > 0) {
+      // keep animation running smoothly
+      if (player.alpha < 1) player.alpha += 0.05;
 
-    player.x = lerp(player.prevX, player.destX, player.alpha); // smooth transition with lerp
-    player.y = lerp(player.prevY, player.destY, player.alpha);
+      player.x = lerp(player.prevX, player.destX, player.alpha); // smooth transition with lerp
+      player.y = lerp(player.prevY, player.destY, player.alpha);
 
-    // draw player
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, player.rad, 0, 2 * Math.PI);
-    ctx.fillStyle = player.color;
-    ctx.fill();
+      // draw player
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.rad, 0, 2 * Math.PI);
+      ctx.fillStyle = player.color;
+      ctx.fill();
 
-    // draw health
-    var healthWidth = 50;
-    var healthHeight = 5;
-    ctx.fillStyle = 'red';
-    ctx.fillRect(player.x - healthWidth / 2, player.y - 35, healthWidth, healthHeight);
+      // draw health
+      var healthWidth = 50;
+      var healthHeight = 5;
+      ctx.fillStyle = 'red';
+      ctx.fillRect(player.x - healthWidth / 2, player.y - 35, healthWidth, healthHeight);
 
-    var remainingWidth = healthWidth * (player.health / 100);
-    ctx.fillStyle = 'green';
-    ctx.fillRect(player.x - healthWidth / 2, player.y - 35, remainingWidth, healthHeight);
+      var remainingWidth = healthWidth * (player.health / 100);
+      ctx.fillStyle = 'green';
+      ctx.fillRect(player.x - healthWidth / 2, player.y - 35, remainingWidth, healthHeight);
 
-    if (player.attacking) {
-      // get angle of attack based on mouse click location
-      var dx = player.mouseX - player.x;
-      var dy = player.mouseY - player.y;
-      var angle = Math.atan2(dy, dx);
+      if (player.attacking) {
+        // get angle of attack based on mouse click location
+        var dx = player.mouseX - player.x;
+        var dy = player.mouseY - player.y;
+        var angle = Math.atan2(dy, dx);
 
-      // draw attack
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      ctx.rotate(angle);
-      var path = new Path2D();
-      path.moveTo(50, 0);
-      path.lineTo(0, 5);
-      path.lineTo(0, -5);
-      ctx.fillStyle = '#8c8c8c';
-      ctx.fill(path);
-      ctx.restore();
+        // draw attack
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(angle);
+        var path = new Path2D();
+        path.moveTo(50, 0);
+        path.lineTo(0, 5);
+        path.lineTo(0, -5);
+        ctx.fillStyle = '#8c8c8c';
+        ctx.fill(path);
+        ctx.restore();
+      }
     }
   }
 };
@@ -237,7 +249,14 @@ var drawPlayers = function drawPlayers() {
 var updateHealth = function updateHealth(data) {
   console.log('updateHealth');
   if (players[data.playerID]) players[data.playerID].health = data.health;
-  if (players[id].health <= 0) socket.emit('leave');
+  if (players[id].health <= 0) {
+    dead = true;
+    gameStarted = false;
+    ready = false;
+    players = {};
+    enemies = {};
+    socket.emit('leave');
+  }
 };
 
 // update a player from server
@@ -281,10 +300,14 @@ var removePlayer = function removePlayer(id) {
 
 // set this player from server
 var setPlayer = function setPlayer(data) {
-  id = data.id; // set id from server data
-  color = data.color; // set color from server data
-  players[id] = data; // set player with new id
-  requestAnimationFrame(draw); // draw with new info
+  id = data.player.id; // set id from server data
+  color = data.player.color; // set color from server data
+  players = data.others; // set player with new id
+};
+
+// set other players from server
+var addPlayer = function addPlayer(data) {
+  players[data.id] = data; // set player with new id
 };
 
 // signal ready to server

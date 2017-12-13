@@ -9,6 +9,7 @@ let moveUp = false; // up or w held
 let moveDown = false; // down or s held
 let gameStarted = false;
 let ready = false;
+let dead = false;
 
 //canvas
 let canvas;
@@ -23,24 +24,22 @@ let score = 0;
 //redraw canvas
 const draw = () => {
   
-  //if(gameStarted) {
-    if(players[id].health > 0) 
-    {
-      movePlayer(); // get player movement
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
   
-      ctx.clearRect(0, 0, canvas.width, canvas.height); // clear screen
-      drawHUD();
-      drawPlayers();
-      drawEnemies();
-    } else {
-      ctx.font = '20px Verdana';
-      ctx.textAlign = 'center';
-      ctx.fillText('YOU DIED', canvas.width / 2, canvas.height / 2);
-    }
-  /*} else {
-    ctx.clearRect(0, 0, canvas.width, canvas.height):
+  if (dead) {
+    ctx.font = '20px Verdana';
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU DIED', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('(Press space bar to play again)', canvas.width / 2, (canvas.height / 2)  + 20);
+  } else if (gameStarted) {
+    movePlayer(); // get player movement
+
+    drawHUD();
+    drawPlayers();
+    drawEnemies();  
+  } else {
     drawReadyStates();
-  }*/
+  }
   requestAnimationFrame(draw); // continue to draw updates
 };
 
@@ -63,19 +62,22 @@ const drawReadyStates = () => {
   {
     const player = players[keys[i]];
     
-    if(!player.ready) ctx.fillStyle = 'red';
-    else ctx.fillSyle = 'green';
     ctx.beginPath();
+    if(!player.ready) ctx.fillStyle = 'red';
+    else ctx.fillStyle = 'green'; 
     ctx.arc(drawX, drawY, player.rad, 0, 2 * Math.PI);
     ctx.fill();
     
-    let name = 'Player ' + i.toString();
-    if(player.id = id) name = 'You';
+    let num = i + 1;
+    let name = 'Player ' + num.toString();
+    if(player.id == id) name = 'You';
+    ctx.beginPath();
     ctx.font = '20px Verdana';
     ctx.textAlign = 'left';
+    ctx.fillStyle = player.color;
     ctx.fillText(name, drawX + (player.rad + 5), drawY);
     
-    drawY += 30;
+    drawY += 50;
   }
 };
 
@@ -94,13 +96,15 @@ const keyDownHandler = (e) => {
   if(!keysDown[e.keyCode]){
     switch(e.keyCode) {
       case 82: // R
-        /*if(!gameStarted) {
+        if(!gameStarted) {
           ready = !ready;
+          players[id].ready = ready;
           readyUp();
-        }*/
+        }
         break;
       case 32: // space
-        playAgain();
+        e.preventDefault();
+        if(dead) playAgain();
         break;
       default:
         break;
@@ -109,17 +113,17 @@ const keyDownHandler = (e) => {
   
   keysDown[e.keyCode] = e.type == 'keydown'; // check if key is down
   
-  //if(gameStarted) {
+  if(gameStarted) {
     moveLeft = keysDown[37] || keysDown[65]; // left or a held
     moveRight = keysDown[39] || keysDown[68]; // right or d held
     moveUp = keysDown[38] || keysDown[87]; // up or w held
     moveDown = keysDown[40] || keysDown[83]; // down or s held
-  //}
+  } 
 };
 
 // function to update position of initial arrow draw
 const mouseDownHandler = (e) => {
-  if(!players[id].attacking /*&& gameStarted*/) {
+  if(gameStarted && players[id] && !players[id].attacking) {
     players[id].attacking = true;
     players[id].mouseX = parseInt(e.clientX - offsetX);
     players[id].mouseY = parseInt(e.clientY - offsetY);
@@ -133,6 +137,7 @@ const updateScore = (serverScore) => {
   
 const playAgain = () => {
   socket.emit('join', { width: canvas.width, height: canvas.height});
+  dead = false;
 }
 
 const handleResize = () => {
@@ -164,6 +169,10 @@ const init = () => {
   });
 
   socket.on('joined', setPlayer); // set player on server 'joined' event
+  socket.on('addPlayer', addPlayer);
+  
+  requestAnimationFrame(draw); // draw with new info
+  
   socket.on('updateMovement', updatePlayer); // update on server 'updateClient' event
   socket.on('updateEnemies', updateEnemies);
   socket.on('left', removePlayer); // remove player on server 'removePlayer' event

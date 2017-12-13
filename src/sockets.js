@@ -2,8 +2,8 @@ const xxh = require('xxhashjs');
 
 let io;
 
-const canvasW = 800;
-const canvasH = 800;
+const canvasW = 1000;
+const canvasH = 600;
 
 // key: room, value: count in room
 const roomCounts = {};
@@ -33,17 +33,19 @@ const createPlayer = (sock) => {
   socket.on('join', (data) => {
     socket.name = xxh.h32(`${socket.id}${new Date().getTime()}`, 0xBADD00D5).toString(16);
     if (Object.keys(roomCounts).length === 0) {
+      console.log('new room');
       const room = 'room0';
       socket.join(room);
       rooms[socket.name] = room;
       roomCounts[room] = 1;
       roomStates[room] = false;
+      enemies[room] = {};
       scores[room] = 0;
     } else {
       const roomKeys = Object.keys(roomCounts); // get each room
       let foundRoom = false; // remains false if all rooms are full
       for (let i = 0; i < roomKeys.length; i++) {
-        if (roomCounts[roomKeys[i]] < roomMax /*&& !roomStates[roomKeys[i]]*/) {
+        if (roomCounts[roomKeys[i]] < roomMax && !roomStates[roomKeys[i]] ) {
           const room = `room${i}`;
           socket.join(room);
           rooms[socket.name] = room;
@@ -53,6 +55,7 @@ const createPlayer = (sock) => {
         }
       }
       if (!foundRoom) {
+        console.log('new room');
         const room = `room${roomKeys.length}`;
         socket.join(room);
         rooms[socket.name] = room;
@@ -85,7 +88,8 @@ const createPlayer = (sock) => {
     if (players[rooms[socket.name]] == null) players[rooms[socket.name]] = {};
     players[rooms[socket.name]][player.id] = player;
 
-    socket.emit('joined', player);
+    socket.emit('joined', { player: player, others: players[rooms[socket.name]] });
+    socket.broadcast.to(rooms[socket.name]).emit('addPlayer', player);
   });
 };
 
@@ -100,7 +104,7 @@ const damageEnemy = (enemy, room) => {
 // function to see if an attack hits an enemy
 const checkAttack = (player) => {
   const enemyKeys = Object.keys(enemies[rooms[player.id]]);
-  
+
   // calculate weapon tip relative to player
   let dx = player.mouseX - player.destX;
   let dy = player.mouseY - player.destY;
@@ -108,19 +112,18 @@ const checkAttack = (player) => {
 
   const weaponX = (dx / mag) * 50;
   const weaponY = (dy / mag) * 50;
-  
-  for(let i = 0; i < enemyKeys.length; i++) {
+
+  for (let i = 0; i < enemyKeys.length; i++) {
     const enemy = enemies[rooms[player.id]][enemyKeys[i]];
-    
-    //calculate weapon distance to enemy
+
+    // calculate weapon distance to enemy
     dx = (player.destX + weaponX) - enemy.destX;
     dy = (player.destY + weaponY) - enemy.destY;
     mag = Math.sqrt((dx * dx) + (dy * dy));
-    
-    if(mag < enemy.rad) { // if weapon tip is within enemy's radius
+
+    if (mag < enemy.rad) { // if weapon tip is within enemy's radius
       damageEnemy(enemy, rooms[player.id]);
     }
-    
   }
 };
 
@@ -133,8 +136,8 @@ const onMove = (sock) => {
 
     players[rooms[socket.name]][socket.name].lastUpdate = new Date().getTime();
     socket.broadcast.to(rooms[socket.name]).emit('updateMovement', players[rooms[socket.name]][socket.name]);
-    
-    if(data.attacking) checkAttack(data);
+
+    if (data.attacking) checkAttack(data);
   });
 };
 
@@ -162,27 +165,26 @@ const findClosestPlayer = (enemy, room) => {
 // function to damage player
 const damagePlayer = (playerID, room) => {
   players[room][playerID].health -= 10;
-  
-  io.sockets.in(room).emit('updateHealth', { playerID: playerID, health: players[room][playerID].health });
+
+  io.sockets.in(room).emit('updateHealth', { playerID, health: players[room][playerID].health });
 };
 
 // function to check enemy/player collisions
 const checkCollisions = (roomEnemies, roomPlayers, room) => {
   const enemyKeys = Object.keys(roomEnemies);
-  for(let i = 0; i < enemyKeys.length; i++) {
+  for (let i = 0; i < enemyKeys.length; i++) {
     const playerKeys = Object.keys(roomPlayers);
     const enemy = roomEnemies[enemyKeys[i]];
-    for(let j = 0; j < playerKeys.length; j++) {
+    for (let j = 0; j < playerKeys.length; j++) {
       const player = roomPlayers[playerKeys[j]];
-      
+
       const dx = player.destX - enemy.destX;
       const dy = player.destY - enemy.destY;
       const dist = Math.sqrt((dx * dx) + (dy * dy));
-      
-      if(dist < (player.rad + enemy.rad)) {
+
+      if (dist < (player.rad + enemy.rad)) {
         damagePlayer(player.id, room);
       }
-      
     }
   }
 };
@@ -225,9 +227,9 @@ const updateEnemies = () => {
       // send room's updated enemies
       const lastUpdate = new Date().getTime();
       io.sockets.in(roomKeys[i]).emit('updateEnemies', { enemies: enemies[roomKeys[i]], lastUpdate });
-      
+
       // check enemy/player collisions
-      checkCollisions(enemies[roomKeys[i]], players[roomKeys[i]], roomKeys[i]); 
+      checkCollisions(enemies[roomKeys[i]], players[roomKeys[i]], roomKeys[i]);
     }
   }
 };
@@ -236,7 +238,7 @@ const spawnEnemy = () => {
   const roomKeys = Object.keys(roomCounts); // get each room
   for (let i = 0; i < roomKeys.length; i++) {
     if (enemies[roomKeys[i]] == null) enemies[roomKeys[i]] = {};
-    if (Object.keys(enemies[roomKeys[i]]).length < 10 /*&& roomStates[roomKeys[i]]*/) {
+    if (Object.keys(enemies[roomKeys[i]]).length < 10 && roomStates[roomKeys[i]] ) {
       // get random side to spawn on
       const randSide = Math.floor((Math.random() * 4) + 1);
 
@@ -283,18 +285,18 @@ const spawnEnemy = () => {
 // check if all players are ready
 const onReady = (sock) => {
   const socket = sock;
-  
+
   socket.on('ready', (readyState) => {
     players[rooms[socket.name]][socket.name].ready = readyState;
     socket.broadcast.to(rooms[socket.name]).emit('updateReady', { id: players[rooms[socket.name]][socket.name].id, ready: readyState });
-    
+
     playerKeys = Object.keys(players[rooms[socket.name]]);
     let allReady = true;
-    for(let i = 0; i < playerKeys.length; i++) {
-      allReady &= players[rooms[socket.name]][playerKeys[i]].ready;
+    for (let i = 0; i < playerKeys.length; i++) {
+      allReady = allReady && players[rooms[socket.name]][playerKeys[i]].ready;
     }
-    
-    if(allReady) {
+
+    if (allReady) {
       io.sockets.in(rooms[socket.name]).emit('startGame');
       roomStates[rooms[socket.name]] = true;
     }
@@ -306,12 +308,18 @@ const onLeave = (sock) => {
   const socket = sock;
 
   socket.on('leave', () => {
-    delete players[rooms[socket.name]][socket.name]; // delete player on server to be recreated
-    socket.leave(rooms[socket.name]); // remove socket from room
-    roomCounts[rooms[socket.name]]--;
-    io.sockets.in(rooms[socket.name]).emit('left', players[rooms[socket.name]][socket.name].id); // notify clients
-    if (roomCounts[rooms[socket.name]] <= 0) delete roomCounts[rooms[socket.name]];
-    delete rooms[socket.name];
+    if (players[rooms[socket.name]] && players[rooms[socket.name]][socket.name]) {
+      io.sockets.in(rooms[socket.name]).emit('left', players[rooms[socket.name]][socket.name].id); // notify clients
+      delete players[rooms[socket.name]][socket.name]; // delete player on server to be recreated
+      socket.leave(rooms[socket.name]); // remove socket from room
+      roomCounts[rooms[socket.name]]--;
+      if (roomCounts[rooms[socket.name]] <= 0) {
+        delete roomCounts[rooms[socket.name]];
+        delete rooms[socket.name];
+        delete enemies[rooms[socket.name]];
+        delete players[rooms[socket.name]];
+      }
+    }
   });
 };
 
@@ -320,12 +328,18 @@ const onDisconnect = (sock) => {
   const socket = sock;
 
   socket.on('disconnect', () => {
-    io.sockets.in(rooms[socket.name]).emit('left', players[rooms[socket.name]][socket.name].id); // notify clients
-    delete players[rooms[socket.name]][socket.name]; // delete player on server
-    socket.leave(rooms[socket.name]); // remove socket from room
-    roomCounts[rooms[socket.name]]--;
-    if (roomCounts[rooms[socket.name]] <= 0) delete roomCounts[rooms[socket.name]];
-    delete rooms[socket.name];
+    if (players[rooms[socket.name]] && players[rooms[socket.name]][socket.name]) {
+      io.sockets.in(rooms[socket.name]).emit('left', players[rooms[socket.name]][socket.name].id); // notify clients
+      delete players[rooms[socket.name]][socket.name]; // delete player on server
+      socket.leave(rooms[socket.name]); // remove socket from room
+      roomCounts[rooms[socket.name]]--;
+      if (roomCounts[rooms[socket.name]] <= 0) {
+        delete roomCounts[rooms[socket.name]];
+        delete rooms[socket.name];
+        delete enemies[rooms[socket.name]];
+        delete players[rooms[socket.name]];
+      }
+    }
   });
 };
 

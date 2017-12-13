@@ -6,46 +6,48 @@ const drawPlayers = () => {
   {
     const player = players[keys[i]];
     
-    // keep animation running smoothly
-    if(player.alpha < 1) player.alpha += 0.05;
-    
-    player.x = lerp(player.prevX, player.destX, player.alpha); // smooth transition with lerp
-    player.y = lerp(player.prevY, player.destY, player.alpha);
+    if(player.health > 0) {
+      // keep animation running smoothly
+      if(player.alpha < 1) player.alpha += 0.05;
 
-    // draw player
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, player.rad, 0, 2 * Math.PI);
-    ctx.fillStyle = player.color;
-    ctx.fill();
-    
-    // draw health
-    let healthWidth = 50;
-    let healthHeight = 5;
-    ctx.fillStyle = 'red';
-    ctx.fillRect(player.x - (healthWidth / 2), player.y - 35, healthWidth, healthHeight);
-    
-    let remainingWidth = healthWidth * (player.health / 100);
-    ctx.fillStyle = 'green';
-    ctx.fillRect(player.x - (healthWidth / 2), player.y - 35, remainingWidth, healthHeight);
-    
-    
-    if(player.attacking) {
-      // get angle of attack based on mouse click location
-      let dx = player.mouseX - player.x;
-      let dy = player.mouseY - player.y;
-      let angle = Math.atan2(dy, dx);
-      
-      // draw attack
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      ctx.rotate(angle);
-      let path = new Path2D();
-      path.moveTo(50, 0);
-      path.lineTo(0, 5);
-      path.lineTo(0, -5);
-      ctx.fillStyle = '#8c8c8c'
-      ctx.fill(path);
-      ctx.restore();
+      player.x = lerp(player.prevX, player.destX, player.alpha); // smooth transition with lerp
+      player.y = lerp(player.prevY, player.destY, player.alpha);
+
+      // draw player
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.rad, 0, 2 * Math.PI);
+      ctx.fillStyle = player.color;
+      ctx.fill();
+
+      // draw health
+      let healthWidth = 50;
+      let healthHeight = 5;
+      ctx.fillStyle = 'red';
+      ctx.fillRect(player.x - (healthWidth / 2), player.y - 35, healthWidth, healthHeight);
+
+      let remainingWidth = healthWidth * (player.health / 100);
+      ctx.fillStyle = 'green';
+      ctx.fillRect(player.x - (healthWidth / 2), player.y - 35, remainingWidth, healthHeight);
+
+
+      if(player.attacking) {
+        // get angle of attack based on mouse click location
+        let dx = player.mouseX - player.x;
+        let dy = player.mouseY - player.y;
+        let angle = Math.atan2(dy, dx);
+
+        // draw attack
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(angle);
+        let path = new Path2D();
+        path.moveTo(50, 0);
+        path.lineTo(0, 5);
+        path.lineTo(0, -5);
+        ctx.fillStyle = '#8c8c8c'
+        ctx.fill(path);
+        ctx.restore();
+      }
     }
   }
 };
@@ -54,7 +56,14 @@ const drawPlayers = () => {
 const updateHealth = (data) => {
   console.log('updateHealth');
   if(players[data.playerID]) players[data.playerID].health = data.health;
-  if(players[id].health <= 0) socket.emit('leave');
+  if(players[id].health <= 0) {
+    dead = true;
+    gameStarted = false;
+    ready = false;
+    players = {};
+    enemies = {};
+    socket.emit('leave');
+  }
   
 };
 
@@ -100,10 +109,14 @@ const removePlayer = (id) => {
 
 // set this player from server
 const setPlayer = (data) => {
-  id = data.id; // set id from server data
-  color = data.color; // set color from server data
-  players[id] = data; // set player with new id
-  requestAnimationFrame(draw); // draw with new info
+  id = data.player.id; // set id from server data
+  color = data.player.color; // set color from server data
+  players = data.others; // set player with new id
+};
+
+// set other players from server
+const addPlayer = (data) => {
+  players[data.id] = data; // set player with new id
 };
 
 // signal ready to server

@@ -2,14 +2,14 @@ body {
   background-color: maroon;
 }
 h1 {
-  color: saddlebrown;
+  color: grey;
   display: block;
   font-size: 40px;
   text-align: center;
   margin-top: 10px;
 }
 h2 {
-  color: saddlebrown;
+  color: grey;
   display: block;
   width: 800px;
   font-style: oblique;
@@ -20,7 +20,7 @@ h2 {
   margin-right: auto;
 }
 p {
-  color: maroon;
+  color: grey;
   display: block;
   width: 800px;
   font-size: 14px;
@@ -36,4 +36,28 @@ canvas {
   margin-right: auto;
   display: block;
   margin-top: 10px;
+}
+#leftAd {
+  background-color: aquamarine;
+  color: coral;
+  width: 300px;
+  height: 800px;
+  line-height: 800px;
+  margin-left: auto;
+  margin-right:auto;
+  text-align: center;
+  font-size: 40px;
+  float: left;
+}
+#rightAd {
+  background-color: aquamarine;
+  color: coral;
+  width: 300px;
+  height: 800px;
+  line-height: 800px;
+  margin-left: auto;
+  margin-right:auto;
+  text-align: center;
+  font-size: 40px;
+  float: right;
 }
