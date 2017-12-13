@@ -45,7 +45,7 @@ const createPlayer = (sock) => {
       const roomKeys = Object.keys(roomCounts); // get each room
       let foundRoom = false; // remains false if all rooms are full
       for (let i = 0; i < roomKeys.length; i++) {
-        if (roomCounts[roomKeys[i]] < roomMax && !roomStates[roomKeys[i]] ) {
+        if (roomCounts[roomKeys[i]] < roomMax && !roomStates[roomKeys[i]]) {
           const room = `room${i}`;
           socket.join(room);
           rooms[socket.name] = room;
@@ -88,7 +88,7 @@ const createPlayer = (sock) => {
     if (players[rooms[socket.name]] == null) players[rooms[socket.name]] = {};
     players[rooms[socket.name]][player.id] = player;
 
-    socket.emit('joined', { player: player, others: players[rooms[socket.name]] });
+    socket.emit('joined', { player, others: players[rooms[socket.name]] });
     socket.broadcast.to(rooms[socket.name]).emit('addPlayer', player);
   });
 };
@@ -238,7 +238,7 @@ const spawnEnemy = () => {
   const roomKeys = Object.keys(roomCounts); // get each room
   for (let i = 0; i < roomKeys.length; i++) {
     if (enemies[roomKeys[i]] == null) enemies[roomKeys[i]] = {};
-    if (Object.keys(enemies[roomKeys[i]]).length < 10 && roomStates[roomKeys[i]] ) {
+    if (Object.keys(enemies[roomKeys[i]]).length < 10 && roomStates[roomKeys[i]]) {
       // get random side to spawn on
       const randSide = Math.floor((Math.random() * 4) + 1);
 
@@ -290,7 +290,7 @@ const onReady = (sock) => {
     players[rooms[socket.name]][socket.name].ready = readyState;
     socket.broadcast.to(rooms[socket.name]).emit('updateReady', { id: players[rooms[socket.name]][socket.name].id, ready: readyState });
 
-    playerKeys = Object.keys(players[rooms[socket.name]]);
+    const playerKeys = Object.keys(players[rooms[socket.name]]);
     let allReady = true;
     for (let i = 0; i < playerKeys.length; i++) {
       allReady = allReady && players[rooms[socket.name]][playerKeys[i]].ready;
